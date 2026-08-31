@@ -5,7 +5,7 @@
 <body class="admin"><div class="adminbar"><div class="wrap"><strong>Alimanpowersg Admin Panel</strong><a class="logout" href="index.html">View Website →</a></div></div>
 <main class="wrap panel"><div id="login" class="box"><h2>Admin Login</h2><p>Sign in to manage Alimanpowersg vacancies.</p><input id="user" autocomplete="username" placeholder="Username"><input id="pass" type="password" autocomplete="current-password" placeholder="Password"><button class="btn main" onclick="login()">Login</button><p id="err" style="color:#b91c1c"></p></div>
 <div id="dashboard" style="display:none"><div class="box" style="display:flex;justify-content:space-between;align-items:center;gap:15px"><div><h2 style="margin:0">Dashboard</h2><small>Manage your job vacancies below.</small></div><button class="btn" onclick="logout()">Logout</button></div><div class="box"><h2>Add Job Vacancy</h2><div class="grid"><input id="title" placeholder="Job title"><input id="type" placeholder="Type (Full Time / Skilled)"><input id="location" value="Singapore" placeholder="Location"><input id="desc" placeholder="Short description"></div><button class="btn main" onclick="addJob()">Add Vacancy</button></div>
-<div class="box"><h2>Project Gallery</h2><p>Upload a project photo and it will appear in the website gallery.</p><div class="grid"><input id="ptitle" placeholder="Project title"><input id="pdesc" placeholder="Short description"><input id="pimage" type="file" accept="image/*"></div><button class="btn main" onclick="addProject()">Upload Project Photo</button><div id="projects"></div></div><div class="box"><h2>Manage Vacancies</h2><div id="rows"></div><button class="btn" onclick="resetJobs()">Reset Demo Jobs</button></div></div></main>
+<div class="box"><h2>Project Gallery</h2><p>Upload a project photo and it will appear in the website gallery.</p><div class="grid"><input id="ptitle" placeholder="Project title"><input id="pdesc" placeholder="Short description"><input id="pimage" type="file" accept="image/*" multiple><small>Select multiple images at once (up to 10).</small></div><button class="btn main" onclick="addProject()">Upload Selected Photos</button><p id="uploadStatus" style="color:#1264e5;font-size:13px"></p><div id="projects"></div></div><div class="box"><h2>Manage Vacancies</h2><div id="rows"></div><button class="btn" onclick="resetJobs()">Reset Demo Jobs</button></div></div></main>
 <script>
 const defaults=[{title:"Construction Worker",type:"Full Time",location:"Singapore",desc:"General construction manpower opportunities."},{title:"General Worker",type:"Full Time",location:"Singapore",desc:"Operations and site support roles."},{title:"Cleaner",type:"Full Time",location:"Singapore",desc:"Cleaning and facilities support opportunities."}];
 function jobs(){return JSON.parse(localStorage.getItem("alimanpowersg_jobs")||"null")||defaults}
@@ -18,10 +18,53 @@ function resetJobs(){localStorage.removeItem("alimanpowersg_jobs");render()}
 function logout(){localStorage.removeItem("alimanpowersg_auth");location.reload()}
 function safe(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}show();
 
-function getProjects(){try{return JSON.parse(localStorage.getItem("alimanpowersg_projects"))||[]}catch(e){return[]}}
-function renderProjects(){let ps=getProjects(),box=document.getElementById("projects");if(!box)return;box.innerHTML=ps.map((p,i)=>`<div class="row"><div style="display:flex;gap:12px;align-items:center"><img src="${p.image}" style="width:90px;height:60px;object-fit:cover;border-radius:7px"><div><b>${safe(p.title)}</b><small>${safe(p.desc||"")}</small></div></div><button class="danger" onclick="delProject(${i})">Delete</button></div>`).join("")||"<small>No project photos added yet.</small>"}
-function addProject(){const f=document.getElementById("pimage").files[0],title=document.getElementById("ptitle").value.trim();if(!f||!title)return alert("Enter a title and choose an image.");if(f.size>1500000)return alert("Please use an image under 1.5 MB.");const r=new FileReader();r.onload=()=>{let ps=getProjects();ps.push({title,desc:document.getElementById("pdesc").value,image:r.result});localStorage.setItem("alimanpowersg_projects",JSON.stringify(ps));document.getElementById("ptitle").value="";document.getElementById("pdesc").value="";document.getElementById("pimage").value="";renderProjects()};r.readAsDataURL(f)}
-function delProject(i){let ps=getProjects();ps.splice(i,1);localStorage.setItem("alimanpowersg_projects",JSON.stringify(ps));renderProjects()}
 
-setTimeout(renderProjects,100);
-</script></body></html>
+function getProjects(){try{return JSON.parse(localStorage.getItem("alimanpowersg_projects"))||[]}catch(e){return[]}}
+function renderProjects(){let ps=getProjects(),box=document.getElementById("projects");if(!box)return;box.innerHTML=ps.map((p,i)=>`<div class="row"><div style="display:flex;gap:12px;align-items:center"><img src="${p.image}" style="width:90px;height:60px;object-fit:cover;border-radius:7px"><div><b>${safe(p.title)}</b><small>${safe(p.desc||"")}</small></div></div><button class="danger" onclick="delProject(${i})">Delete</button></div>`).join("")||"<small>No local project photos added yet.</small>"}
+async function addProject(){
+ const files=[...document.getElementById("pimage").files], title=document.getElementById("ptitle").value.trim();
+ const desc=document.getElementById("pdesc").value.trim();
+ if(!files.length||!title)return alert("Enter a title and choose one or more images.");
+ if(files.length>10)return alert("Please select 10 images or fewer at once.");
+ const status=document.getElementById("uploadStatus"); status.textContent="Uploading "+files.length+" photo(s)...";
+ if(window.firebaseConfigured && window.firebase && firebase.apps.length){
+   try{
+    // Anonymous sign-in is only used to authorize the upload; the site owner does not need to create user accounts.
+    await firebase.auth().signInAnonymously();
+    const db=firebase.firestore(), batch=db.batch();
+    for(const f of files){
+      if(f.size>8*1024*1024) throw new Error(f.name+" is over 8 MB.");
+      const safeName=f.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+      const ref=firebase.storage().ref("projects/"+Date.now()+"_"+safeName);
+      await ref.put(f);
+      const url=await ref.getDownloadURL();
+      const doc=db.collection("projects").doc();
+      batch.set(doc,{title,desc,image:url,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    }
+    await batch.commit();
+    document.getElementById("ptitle").value="";document.getElementById("pdesc").value="";document.getElementById("pimage").value="";
+    status.textContent="Uploaded successfully. Refresh the website to see the photos.";
+    renderProjects();
+    return;
+   }catch(e){console.error(e);status.textContent="Online upload failed: "+e.message;return}
+ }
+ // Fallback for unconfigured Firebase: saves locally (only this browser/device).
+ const readers=files.map(f=>new Promise((resolve,reject)=>{if(f.size>1500000){reject(new Error(f.name+" is over 1.5 MB in local mode."));return}const r=new FileReader();r.onload=()=>resolve({title,desc,image:r.result});r.onerror=reject;r.readAsDataURL(f)}));
+ try{let ps=getProjects();ps.push(...await Promise.all(readers));localStorage.setItem("alimanpowersg_projects",JSON.stringify(ps));document.getElementById("ptitle").value="";document.getElementById("pdesc").value="";document.getElementById("pimage").value="";status.textContent="Saved locally. Add Firebase configuration to make photos visible to everyone.";renderProjects()}catch(e){alert(e.message);status.textContent=""}
+}
+function delProject(i){let ps=getProjects();ps.splice(i,1);localStorage.setItem("alimanpowersg_projects",JSON.stringify(ps));renderProjects()}
+async function renderOnlineProjects(){
+ if(!window.firebaseConfigured||!window.firebase||!firebase.apps.length)return;
+ try{
+  const snap=await firebase.firestore().collection("projects").orderBy("createdAt","desc").get();
+  const box=document.getElementById("projects");
+  box.innerHTML=snap.docs.map(d=>{const p=d.data();return `<div class="row"><div style="display:flex;gap:12px;align-items:center"><img src="${p.image}" style="width:90px;height:60px;object-fit:cover;border-radius:7px"><div><b>${safe(p.title)}</b><small>${safe(p.desc||"")}</small></div></div><button class="danger" onclick="deleteOnlineProject('${d.id}')">Delete</button></div>`}).join("")||"<small>No online project photos added yet.</small>";
+ }catch(e){console.warn(e);renderProjects()}
+}
+async function deleteOnlineProject(id){
+ if(!confirm("Delete this project photo?"))return;
+ try{await firebase.firestore().collection("projects").doc(id).delete();renderOnlineProjects()}catch(e){alert("Delete failed: "+e.message)}
+}
+setTimeout(()=>{renderProjects();renderOnlineProjects()},100);
+
+</script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script><script src="firebase-config.js"></script></body></html>

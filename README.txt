@@ -1,28 +1,50 @@
-ALIMANPOWERSG PREMIUM WEBSITE
-===============================
-Files:
-- index.html        Main website
-- style.css         Design
-- script.js         Website functionality
-- admin.html        Demo admin panel
-- README.txt        This file
+ALIMANPOWERSG - ONLINE MULTI-PHOTO GALLERY SETUP
 
-ADMIN PANEL
------------
-Open admin.html
-Admin username: ali9090
-Admin password: sikder8080
+The Firebase web config has already been inserted into firebase-config.js.
 
-The admin panel stores job vacancies in browser localStorage and updates the job cards on index.html in the same browser.
+ONE-TIME FIREBASE STEPS
 
-IMPORTANT FOR REAL DEPLOYMENT
------------------------------
-This is a static demo admin panel, not a secure server-side CMS. For production use, replace it with a backend (e.g. PHP/MySQL, Node/PostgreSQL, Supabase, Firebase, etc.) and secure authentication. Do not use the demo password in production.
+1. Open Firebase Console: https://console.firebase.google.com/
+2. Open the project: alimanpowersg
+3. Authentication -> Sign-in method -> enable Anonymous.
+4. Firestore Database -> Create database. Start in production mode.
+5. Firestore -> Rules: publish the rules below.
+6. Storage -> Get started. If Firebase asks you to upgrade to Blaze, complete that step in your own Firebase account. Storage billing/plan requirements are controlled by Firebase.
+7. Storage -> Rules: publish the rules below.
 
-CONTACT
--------
-Singapore
-+65 8192 1457
-WhatsApp: https://wa.me/6581921457
+FIRESTORE RULES
+----------------
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /projects/{projectId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
 
-Before publishing, add the company's verified address, email, registration/licensing information, privacy policy and actual vacancies.
+STORAGE RULES
+----------------
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /projects/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+
+HOW TO UPLOAD MANY PHOTOS
+----------------
+1. Open admin.html.
+2. Login with the existing admin credentials.
+3. Project Gallery -> enter a title/description.
+4. Click Choose File and select multiple images at once (up to 10).
+5. Click Upload Selected Photos.
+6. The photos are uploaded to Firebase Storage and their public-to-authenticated URLs are saved in Firestore.
+7. Open/refresh index.html; everyone visiting the website will see the same online gallery.
+
+IMPORTANT
+----------------
+- The website's admin username/password is currently client-side demo protection. It is NOT secure authentication. For a real production admin system, replace it with Firebase Authentication and admin-only rules.
+- Do not paste Firebase service-account/private keys into the website. The web config above is intended for browser use.

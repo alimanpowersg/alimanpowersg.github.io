@@ -17,6 +17,23 @@ document.querySelectorAll("section:not(.hero), .service-grid article, .job").for
 const revealObserver=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add("visible");revealObserver.unobserve(e.target)}}),{threshold:.08});
 document.querySelectorAll(".reveal").forEach(el=>revealObserver.observe(el));
 
-function getProjects(){try{return JSON.parse(localStorage.getItem("alimanpowersg_projects"))||[]}catch(e){return[]}}
-function renderGallery(){const box=document.getElementById("galleryList");if(!box)return;const ps=getProjects();if(!ps.length){box.innerHTML='<article class="gallery-card"><img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80" alt="Project"><div><h3>Project photos coming soon</h3><p>Add your own project photos from the Admin Panel.</p></div></article>';return}box.innerHTML=ps.map(p=>`<article class="gallery-card"><img src="${p.image}" alt="${esc(p.title)}"><div><h3>${esc(p.title)}</h3><p>${esc(p.desc||"Project showcase")}</p></div></article>`).join("")}
+
+function getProjectsLocal(){try{return JSON.parse(localStorage.getItem("alimanpowersg_projects"))||[]}catch(e){return[]}}
+function renderGalleryLocal(){
+ const box=document.getElementById("galleryList");if(!box)return;
+ const ps=getProjectsLocal();
+ if(!ps.length){box.innerHTML='<article class="gallery-card"><img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80" alt="Project"><div><h3>Project photos coming soon</h3><p>Add your own project photos from the Admin Panel.</p></div></article>';return}
+ box.innerHTML=ps.map(p=>`<article class="gallery-card"><img src="${p.image}" alt="${esc(p.title)}"><div><h3>${esc(p.title)}</h3><p>${esc(p.desc||"Project showcase")}</p></div></article>`).join("")
+}
+async function renderGallery(){
+ const box=document.getElementById("galleryList");if(!box)return;
+ if(window.firebaseConfigured && window.firebase && firebase.apps.length){
+   try{
+    const snap=await firebase.firestore().collection("projects").orderBy("createdAt","desc").get();
+    const ps=snap.docs.map(d=>d.data());
+    if(ps.length){box.innerHTML=ps.map(p=>`<article class="gallery-card"><img loading="lazy" src="${p.image}" alt="${esc(p.title)}"><div><h3>${esc(p.title)}</h3><p>${esc(p.desc||"Project showcase")}</p></div></article>`).join("");return}
+   }catch(e){console.warn("Online gallery unavailable; using local gallery.",e)}
+ }
+ renderGalleryLocal();
+}
 renderGallery();
